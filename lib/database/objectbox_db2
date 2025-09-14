@@ -1,0 +1,54 @@
+import 'dart:async';
+import 'package:firebase_note_app/database/abstract_db.dart';
+import 'package:firebase_note_app/notemodel.dart';
+import 'package:firebase_note_app/objectbox.g.dart';
+
+class ObjectboxRepo implements NoteRepo {
+  final Box<NoteObj> _box;
+  final StreamController<List<NoteObj>> _controller =
+      StreamController.broadcast();
+
+
+   
+
+  ObjectboxRepo(this._box) {
+    _updateStream();
+    // Watch for changes in the box
+    _box.query().watch(triggerImmediately: true).listen((event) {
+      _updateStream();
+    });
+  }
+
+  void _updateStream() {
+    final notes = _box.getAll();
+    _controller.add(notes);
+  }
+
+  @override
+  Stream<List<NoteObj>> getAllNotes() {
+    return _controller.stream;
+  }
+
+  @override
+  Future<void> addNote(String content) async {
+    // Generate a unique String ID for the note
+    final String newId = DateTime.now().millisecondsSinceEpoch.toString();
+    _box.put(NoteObj(id: newId, content: content));
+  }
+
+  @override
+  Future<void> deleteNote(String id) async {
+    // Query for the note using the String ID
+    final query = _box.query(NoteObj_.id.equals(id)).build();
+    final noteToDelete = query.findFirst();
+    query.close();
+    if (noteToDelete != null) {
+      _box.remove(noteToDelete.objectboxId);
+    }
+  }
+
+  @override
+  Future<void> clearAll() async {
+    _box.removeAll();
+  }
+}
